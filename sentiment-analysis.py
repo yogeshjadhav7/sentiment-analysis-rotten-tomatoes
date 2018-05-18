@@ -118,7 +118,7 @@ for indx in range(len(test_features)):
 
 
 print('\nTraining word2vec...')
-word_model = gensim.models.Word2Vec(features, size=100, min_count=1, window=3, iter=100)
+word_model = gensim.models.Word2Vec(features, size=300, min_count=1, window=3, iter=100)
 pretrained_weights = word_model.wv.syn0
 vocab_size, emdedding_size = pretrained_weights.shape
 print('Word embedding shape:', pretrained_weights.shape)
@@ -176,14 +176,15 @@ from keras.utils import to_categorical
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.models import load_model
 
-batch_size = 128
+MAX_LEN = 100
+batch_size = 32
 print("Padding the data for LSTM...")
 print("Padding train data...")
-x_train = sequence.pad_sequences(train_features, maxlen=emdedding_size)
+x_train = sequence.pad_sequences(train_features, maxlen=MAX_LEN)
 print("Padding val data...")
-x_val = sequence.pad_sequences(val_features, maxlen=emdedding_size)
+x_val = sequence.pad_sequences(val_features, maxlen=MAX_LEN)
 print("Padding test data...")
-x_test = sequence.pad_sequences(test_features, maxlen=emdedding_size)
+x_test = sequence.pad_sequences(test_features, maxlen=MAX_LEN)
 
 
 # In[ ]:
@@ -191,34 +192,44 @@ x_test = sequence.pad_sequences(test_features, maxlen=emdedding_size)
 
 droprate = 0.7
 
-print('\nTraining LSTM...')
-model = Sequential()
-model.add(Embedding(input_dim=vocab_size, output_dim=emdedding_size, weights=[pretrained_weights]))
-model.add(Bidirectional(LSTM(units=emdedding_size, dropout=droprate, recurrent_dropout=droprate)))
-model.add(BatchNormalization())
-model.add(Dropout(droprate))
+try:
+    model = load_model(MODEL_NAME)
+    print("Loaded saved model: " + MODEL_NAME)
+except:
+    print("Creating new model: " + MODEL_NAME)
+    model = None
 
-model.add(Dense(units=256, activation='elu'))
-model.add(BatchNormalization())
-model.add(Dropout(droprate))
+if model is None:
+    model = Sequential()
+    model.add(Embedding(input_dim=vocab_size, output_dim=emdedding_size, weights=[pretrained_weights]))
+    model.add(Bidirectional(LSTM(units=emdedding_size, dropout=droprate, recurrent_dropout=droprate)))
+    model.add(BatchNormalization())
+    model.add(Dropout(droprate))
 
-model.add(Dense(units=32, activation='elu'))
-model.add(BatchNormalization())
-model.add(Dropout(droprate))
+    model.add(Dense(units=256, activation='elu'))
+    model.add(BatchNormalization())
+    model.add(Dropout(droprate))
 
-model.add(Dense(units=1, activation='sigmoid'))
+    model.add(Dense(units=32, activation='elu'))
+    model.add(BatchNormalization())
+    model.add(Dropout(droprate))
 
-model.compile(loss='mean_squared_error',
-              optimizer='adam',
-              metrics=['accuracy'])
+    model.add(Dense(units=1, activation='sigmoid'))
 
-model.fit(x_train, y_train,
-          batch_size=batch_size,
-          epochs=25,
-          verbose=0,
-          validation_data=[x_val, y_val],
-          callbacks = [ModelCheckpoint(MODEL_NAME, monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='max', period=1)])
+    model.compile(loss='mean_squared_error',
+                  optimizer='adam',
+                  metrics=['accuracy'])
 
+if TRAIN_MODEL:
+    print('\nTraining LSTM model...')
+    model.fit(x_train, y_train,
+              batch_size=batch_size,
+              epochs=25,
+              verbose=0,
+              validation_data=[x_val, y_val],
+              callbacks = [ModelCheckpoint(MODEL_NAME, monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='max', period=1)])
+    
+print('\Validation LSTM model...')
 saved_model = load_model(MODEL_NAME)
 score = saved_model.evaluate(x_test, y_test, verbose=0)
 print('Test loss:', score[0])
