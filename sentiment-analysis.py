@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[86]:
+# In[1]:
 
 
 #Import all the dependencies
@@ -31,26 +31,26 @@ def load_data(file, direc="", sep="\t", header=True):
         return pd.read_csv(csv_path, sep=sep, index_col=False, header=None)
 
 
-# In[87]:
+# In[2]:
 
 
 train_data = load_data(train_file)
 test_data = load_data(test_file)
 
 
-# In[88]:
+# In[3]:
 
 
 train_data.head()
 
 
-# In[89]:
+# In[4]:
 
 
 test_data.head()
 
 
-# In[90]:
+# In[5]:
 
 
 from sklearn .model_selection import StratifiedShuffleSplit
@@ -63,7 +63,7 @@ train_data = strat_train_set
 val_data = strat_val_set
 
 
-# In[91]:
+# In[6]:
 
 
 tokenizer = RegexpTokenizer(r'\w+')
@@ -84,7 +84,7 @@ val_features = nlp_clean(val_data["Phrase"])
 test_features = nlp_clean(test_data["Phrase"])
 
 
-# In[92]:
+# In[7]:
 
 
 features = []
@@ -114,7 +114,7 @@ for indx in range(len(test_features)):
     features.append(test_features[indx])
 
 
-# In[93]:
+# In[8]:
 
 
 print('\nTraining word2vec...')
@@ -124,7 +124,7 @@ vocab_size, emdedding_size = pretrained_weights.shape
 print('Word embedding shape:', pretrained_weights.shape)
 
 
-# In[94]:
+# In[9]:
 
 
 def word2idx(word):
@@ -134,7 +134,7 @@ def idx2word(idx):
     return word_model.wv.index2word[idx]
 
 
-# In[95]:
+# In[10]:
 
 
 def encode_sentences(X):
@@ -155,7 +155,7 @@ val_features = encode_sentences(val_features)
 test_features = encode_sentences(test_features)
 
 
-# In[97]:
+# In[11]:
 
 
 y_train = train_data["Sentiment"].values
@@ -165,7 +165,7 @@ y_val = val_data["Sentiment"].values
 y_val = np.divide(y_val, 4.0)
 
 
-# In[104]:
+# In[12]:
 
 
 from keras.preprocessing import sequence
@@ -173,7 +173,7 @@ from keras.models import Sequential
 from keras.layers import Dense, Dropout, Embedding, LSTM, Bidirectional, BatchNormalization
 from keras.datasets import imdb
 from keras.utils import to_categorical
-from keras.callbacks import ModelCheckpoint, EarlyStopping
+from keras.callbacks import ModelCheckpoint, EarlyStopping, LambdaCallback
 from keras.models import load_model
 
 MAX_LEN = 100
@@ -185,6 +185,15 @@ print("Padding val data...")
 x_val = sequence.pad_sequences(val_features, maxlen=MAX_LEN)
 print("Padding test data...")
 x_test = sequence.pad_sequences(test_features, maxlen=MAX_LEN)
+
+
+# In[13]:
+
+
+#x_train = x_train[0:10,]
+#y_train = y_train[0:10,]
+#x_val = x_val[0:10,]
+#y_val = y_val[0:10,]
 
 
 # In[ ]:
@@ -204,6 +213,7 @@ if model is None:
     model.add(Embedding(input_dim=vocab_size, output_dim=emdedding_size, weights=[pretrained_weights]))
     model.add(Bidirectional(LSTM(units=emdedding_size, dropout=droprate, recurrent_dropout=droprate)))
     
+
     '''
     model.add(BatchNormalization())
     model.add(Dropout(droprate))
@@ -222,6 +232,16 @@ if model is None:
     model.compile(loss='mean_squared_error',
                   optimizer='adam',
                   metrics=['accuracy'])
+    
+def do_on_epoch_end(epoch, _):
+    
+    pred = model.predict(x_val)
+    actual = y_val.copy()
+    pred = np.round(pred * 4.0).flatten()
+    actual = np.round(actual * 4.0).flatten()
+    acc = sum(pred == actual)/ len(actual)
+    print("Accuracy obtained after epoch: " + str(acc * 100))
+    
 
 if TRAIN_MODEL:
     print('\nTraining LSTM model...')
@@ -230,9 +250,11 @@ if TRAIN_MODEL:
               epochs=25,
               verbose=0,
               validation_data=[x_val, y_val],
-              callbacks = [ModelCheckpoint(MODEL_NAME, monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=False, mode='min', period=1)])
+              callbacks = [ModelCheckpoint(MODEL_NAME, monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=False, mode='min', period=1),
+                          LambdaCallback(on_epoch_end=do_on_epoch_end)]
+             )
     
-print('\Validation LSTM model...')
+print('\nValidation LSTM model...')
 saved_model = load_model(MODEL_NAME)
 score = saved_model.evaluate(x_test, y_test, verbose=0)
 print('Test loss:', score[0])
