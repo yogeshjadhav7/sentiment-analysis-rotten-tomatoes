@@ -203,6 +203,8 @@ if model is None:
     model = Sequential()
     model.add(Embedding(input_dim=vocab_size, output_dim=emdedding_size, weights=[pretrained_weights]))
     model.add(Bidirectional(LSTM(units=emdedding_size, dropout=droprate, recurrent_dropout=droprate)))
+    
+    '''
     model.add(BatchNormalization())
     model.add(Dropout(droprate))
 
@@ -213,6 +215,7 @@ if model is None:
     model.add(Dense(units=32, activation='elu'))
     model.add(BatchNormalization())
     model.add(Dropout(droprate))
+    '''
 
     model.add(Dense(units=1, activation='sigmoid'))
 
@@ -227,7 +230,7 @@ if TRAIN_MODEL:
               epochs=25,
               verbose=0,
               validation_data=[x_val, y_val],
-              callbacks = [ModelCheckpoint(MODEL_NAME, monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='max', period=1)])
+              callbacks = [ModelCheckpoint(MODEL_NAME, monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=False, mode='min', period=1)])
     
 print('\Validation LSTM model...')
 saved_model = load_model(MODEL_NAME)
