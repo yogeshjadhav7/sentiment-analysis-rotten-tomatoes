@@ -196,7 +196,7 @@ x_test = sequence.pad_sequences(test_features, maxlen=MAX_LEN)
 #y_val = y_val[0:10,]
 
 
-# In[ ]:
+# In[16]:
 
 
 droprate = 0.7
@@ -213,7 +213,6 @@ if model is None:
     model.add(Embedding(input_dim=vocab_size, output_dim=emdedding_size, weights=[pretrained_weights]))
     model.add(Bidirectional(LSTM(units=emdedding_size, dropout=droprate, recurrent_dropout=droprate)))
     
-
     '''
     model.add(BatchNormalization())
     model.add(Dropout(droprate))
@@ -234,20 +233,20 @@ if model is None:
                   metrics=['accuracy'])
     
 def do_on_epoch_end(epoch, _):
-    
-    pred = model.predict(x_val)
-    actual = y_val.copy()
-    pred = np.round(pred * 4.0).flatten()
-    actual = np.round(actual * 4.0).flatten()
-    acc = sum(pred == actual)/ len(actual)
-    print("Accuracy obtained after epoch: " + str(acc * 100))
+    if(epoch % 2 == 0):
+        pred = model.predict(x_val)
+        actual = y_val.copy()
+        pred = np.round(pred * 4.0).flatten()
+        actual = np.round(actual * 4.0).flatten()
+        acc = sum(pred == actual)
+        print("Accuracy obtained after epoch: " + str(acc) + " / " + str(len(actual)))
     
 
 if TRAIN_MODEL:
     print('\nTraining LSTM model...')
     model.fit(x_train, y_train,
               batch_size=batch_size,
-              epochs=25,
+              epochs=10,
               verbose=0,
               validation_data=[x_val, y_val],
               callbacks = [ModelCheckpoint(MODEL_NAME, monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=False, mode='min', period=1),
@@ -256,7 +255,7 @@ if TRAIN_MODEL:
     
 print('\nValidation LSTM model...')
 saved_model = load_model(MODEL_NAME)
-score = saved_model.evaluate(x_test, y_test, verbose=0)
+score = saved_model.evaluate(x_val, y_val, verbose=0)
 print('Test loss:', score[0])
 print('Test accuracy:', score[1])
 
