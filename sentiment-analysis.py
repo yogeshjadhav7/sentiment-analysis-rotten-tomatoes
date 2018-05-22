@@ -22,6 +22,7 @@ test_file = "test.tsv"
 TRAIN_MODEL = True
 MODEL_NAME = "trained_model_lstm.hdf5"
 FILLER_WORD = "unk"
+EMBEDDING_SIZE = 300
 
 def load_data(file, direc="", sep="\t", header=True):
     csv_path = os.path.join(direc, file)
@@ -118,7 +119,7 @@ for indx in range(len(test_features)):
 
 
 print('\nTraining word2vec...')
-word_model = gensim.models.Word2Vec(features, size=300, min_count=1, window=3, iter=100)
+word_model = gensim.models.Word2Vec(features, size=EMBEDDING_SIZE, min_count=1, window=3, iter=100)
 pretrained_weights = word_model.wv.syn0
 vocab_size, emdedding_size = pretrained_weights.shape
 print('Word embedding shape:', pretrained_weights.shape)
@@ -158,14 +159,22 @@ test_features = encode_sentences(test_features)
 # In[11]:
 
 
-y_train = train_data["Sentiment"].values
-y_train = np.divide(y_train, 4.0)
-
-y_val = val_data["Sentiment"].values
-y_val = np.divide(y_val, 4.0)
+from sklearn.preprocessing import LabelBinarizer
+binarizer = LabelBinarizer()
+binarizer.fit([x for x in range(5)])
 
 
 # In[12]:
+
+
+y_train = train_data["Sentiment"].values
+y_train = binarizer.transform(y_train)
+
+y_val = val_data["Sentiment"].values
+y_val = binarizer.transform(y_val)
+
+
+# In[13]:
 
 
 from keras.preprocessing import sequence
@@ -176,7 +185,7 @@ from keras.utils import to_categorical
 from keras.callbacks import ModelCheckpoint, EarlyStopping, LambdaCallback
 from keras.models import load_model
 
-MAX_LEN = 100
+MAX_LEN = np.int(EMBEDDING_SIZE / 2)
 batch_size = 32
 print("Padding the data for LSTM...")
 print("Padding train data...")
@@ -187,16 +196,16 @@ print("Padding test data...")
 x_test = sequence.pad_sequences(test_features, maxlen=MAX_LEN)
 
 
-# In[13]:
+# In[14]:
 
 
-#x_train = x_train[0:10,]
-#y_train = y_train[0:10,]
-#x_val = x_val[0:10,]
-#y_val = y_val[0:10,]
+#x_train = x_train[0:1000,]
+#y_train = y_train[0:1000,]
+#x_val = x_val[0:1000,]
+#y_val = y_val[0:1000,]
 
 
-# In[16]:
+# In[17]:
 
 
 droprate = 0.7
@@ -211,35 +220,24 @@ except:
 if model is None:
     model = Sequential()
     model.add(Embedding(input_dim=vocab_size, output_dim=emdedding_size, weights=[pretrained_weights]))
-    model.add(Bidirectional(LSTM(units=emdedding_size, dropout=droprate, recurrent_dropout=droprate)))
+    model.add(Bidirectional(LSTM(units=256, dropout=droprate, recurrent_dropout=droprate)))
     
-    '''
+    model.add(Dense(units=64, activation='elu'))
     model.add(BatchNormalization())
     model.add(Dropout(droprate))
 
-    model.add(Dense(units=256, activation='elu'))
+    model.add(Dense(units=16, activation='elu'))
     model.add(BatchNormalization())
     model.add(Dropout(droprate))
 
-    model.add(Dense(units=32, activation='elu'))
-    model.add(BatchNormalization())
-    model.add(Dropout(droprate))
-    '''
+    model.add(Dense(units=5, activation='softmax'))
 
-    model.add(Dense(units=1, activation='sigmoid'))
-
-    model.compile(loss='mean_squared_error',
+    model.compile(loss='categorical_crossentropy',
                   optimizer='adam',
                   metrics=['accuracy'])
     
 def do_on_epoch_end(epoch, _):
-    if(epoch % 2 == 0):
-        pred = model.predict(x_val)
-        actual = y_val.copy()
-        pred = np.round(pred * 4.0).flatten()
-        actual = np.round(actual * 4.0).flatten()
-        acc = sum(pred == actual)
-        print("Accuracy obtained after epoch: " + str(acc) + " / " + str(len(actual)))
+    print("On epoch end called...")
     
 
 if TRAIN_MODEL:
@@ -249,8 +247,9 @@ if TRAIN_MODEL:
               epochs=10,
               verbose=0,
               validation_data=[x_val, y_val],
-              callbacks = [ModelCheckpoint(MODEL_NAME, monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=False, mode='min', period=1),
-                          LambdaCallback(on_epoch_end=do_on_epoch_end)]
+              callbacks = [ModelCheckpoint(MODEL_NAME, monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='max', period=1),
+                          #LambdaCallback(on_epoch_end=do_on_epoch_end)
+                          ]
              )
     
 print('\nValidation LSTM model...')
